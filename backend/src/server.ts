@@ -1,11 +1,13 @@
 import express from 'express';
 import dotenv from 'dotenv';
-import uploadRoutes from './routes/upload';
+import cors from 'cors';
+import uploadRouter from './routes/upload';
+import entriesRouter from './routes/entries';
 
 // Load environment variables
 dotenv.config();
 
-// Add this after dotenv.config()
+// Debug environment variables
 console.log('Environment variables loaded:', {
   region: process.env.AWS_REGION,
   accessKeyIdExists: !!process.env.AWS_ACCESS_KEY_ID,
@@ -17,13 +19,19 @@ console.log('Environment variables loaded:', {
 const app = express();
 
 // Middleware
+app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Routes
-app.use('/api', uploadRoutes);
+app.use('/api', uploadRouter);
+app.use('/api/entries', entriesRouter);
 
 // Basic health check route
+app.get('/', (req, res) => {
+  res.json({ message: 'Server is running' });
+});
+
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
 });

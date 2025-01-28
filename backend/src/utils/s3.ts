@@ -82,15 +82,15 @@ export async function getAudioUrl(key: string): Promise<string> {
   return getSignedUrl(s3Client, command, { expiresIn: 3600 });
 }
 
-// Add this new function
+// Fix the downloadFromS3 function to use the legacy SDK
 export async function downloadFromS3(key: string, localPath: string): Promise<void> {
-  const response = await s3Client.getObject({
+  const response = await s3Legacy.getObject({
     Bucket: process.env.AWS_BUCKET_NAME!,
     Key: key
   }).promise();
 
   if (response.Body) {
-    fs.writeFileSync(localPath, response.Body);
+    fs.writeFileSync(localPath, response.Body as Buffer);
   } else {
     throw new Error('Empty response body from S3');
   }
