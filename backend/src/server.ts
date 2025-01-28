@@ -5,6 +5,14 @@ import uploadRoutes from './routes/upload';
 // Load environment variables
 dotenv.config();
 
+// Add this after dotenv.config()
+console.log('Environment variables loaded:', {
+  region: process.env.AWS_REGION,
+  accessKeyIdExists: !!process.env.AWS_ACCESS_KEY_ID,
+  secretKeyExists: !!process.env.AWS_SECRET_ACCESS_KEY,
+  bucketName: process.env.AWS_BUCKET_NAME
+});
+
 // Initialize express
 const app = express();
 
