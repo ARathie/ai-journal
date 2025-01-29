@@ -2,6 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import AWS from 'aws-sdk';
 import path from 'path';
+import { uploadToS3 } from '../utils/s3';
 
 const router = express.Router();
 
@@ -97,27 +98,34 @@ router.post('/uploadTest', upload.single('audio'), async (req, res) => {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
+    // Get or create entry ID
+    let entryId = req.query.entryId as string;
+    if (!entryId) {
+      // Create entry ID based on date (YYYYMMDD-HHMMSS)
+      const now = new Date();
+      entryId = now.toISOString()
+        .replace(/[-:]/g, '')
+        .replace('T', '-')
+        .split('.')[0]; // Results in format: "20240214-143022"
+    }
+
     console.log('File details:', {
       originalname: req.file.originalname,
       mimetype: req.file.mimetype,
-      size: req.file.size
+      size: req.file.size,
+      entryId
     });
 
-    // Create organized path: YYYY/MM/filename (removed the extra 'audio/')
-    const date = new Date();
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const key = `audio/${year}/${month}/${Date.now()}-${req.file.originalname}`;  // Removed duplicate 'audio/'
+    // Upload with entry organization
+    const key = await uploadToS3(
+      req.file.buffer,
+      req.file.originalname,
+      req.file.mimetype,
+      entryId
+    );
 
-    await s3.upload({
-      Bucket: process.env.AWS_BUCKET_NAME!,
-      Key: key,
-      Body: req.file.buffer,
-      ContentType: req.file.mimetype
-    }).promise();
-
-    console.log('Upload successful with key:', key);  // Added key to log
-    res.json({ key });
+    console.log('Upload successful with key:', key);
+    res.json({ key, entryId });
   } catch (error) {
     console.error('Upload error:', error);
     res.status(500).json({ 

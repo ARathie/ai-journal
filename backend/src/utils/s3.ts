@@ -1,26 +1,16 @@
-import { S3Client, GetObjectCommand, ListBucketsCommand } from '@aws-sdk/client-s3';
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import AWS from 'aws-sdk'; // We'll use this for upload
+import AWS from 'aws-sdk';
 import fs from 'fs';
 
-// Add this debugging
-console.log('AWS Config:', {
-  region: process.env.AWS_REGION,
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID?.slice(0, 5) + '...', // Only log first 5 chars
-  secretKeyExists: !!process.env.AWS_SECRET_ACCESS_KEY,
-  bucketName: process.env.AWS_BUCKET_NAME
-});
-
-// First install: npm install aws-sdk
-
-// Configure legacy SDK
+// Configure legacy SDK (v2) for uploads and downloads
 const s3Legacy = new AWS.S3({
   region: process.env.AWS_REGION,
   accessKeyId: process.env.AWS_ACCESS_KEY_ID,
   secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
 });
 
-// Keep existing S3Client for other operations
+// Configure v3 client for signed URLs
 const s3Client = new S3Client({
   region: process.env.AWS_REGION!,
   credentials: {
@@ -29,60 +19,59 @@ const s3Client = new S3Client({
   }
 });
 
-// Add this test function
-async function testS3Connection() {
-  try {
-    const command = new ListBucketsCommand({});
-    const response = await s3Client.send(command);
-    console.log('S3 Connection Test - Buckets:', response.Buckets?.map(b => b.Name));
-    return true;
-  } catch (error) {
-    console.error('S3 Connection Test Failed:', error);
-    return false;
-  }
-}
+// Debug logging
+console.log('AWS Config:', {
+  region: process.env.AWS_REGION,
+  accessKeyIdExists: !!process.env.AWS_ACCESS_KEY_ID,
+  secretKeyExists: !!process.env.AWS_SECRET_ACCESS_KEY,
+  bucketName: process.env.AWS_BUCKET_NAME
+});
 
+// Use v2 for uploads
 export async function uploadToS3(
   fileBuffer: Buffer,
-  fileName: string,
-  mimeType: string
+  key: string,
+  mimeType: string,
+  entryId?: string  // Optional parameter for entry-related files
 ): Promise<string> {
   try {
+    // If entryId is provided, organize under entries directory
+    const finalKey = entryId 
+      ? `entries/${entryId}/originals/${Date.now()}-${key}`
+      : key;
+
     console.log('Starting upload with params:', {
       bucket: process.env.AWS_BUCKET_NAME,
-      fileName,
+      key: finalKey,
       mimeType,
       bufferSize: fileBuffer.length
     });
-
-    const key = `audio/${Date.now()}-${fileName}`;
     
-    // Use legacy SDK for upload
     await s3Legacy.upload({
       Bucket: process.env.AWS_BUCKET_NAME!,
-      Key: key,
+      Key: finalKey,
       Body: fileBuffer,
       ContentType: mimeType
     }).promise();
     
-    return key;
+    return finalKey;
   } catch (error) {
     console.error('S3 upload error:', error);
     throw error;
   }
 }
 
+// Use v3 for signed URLs
 export async function getAudioUrl(key: string): Promise<string> {
   const command = new GetObjectCommand({
     Bucket: process.env.AWS_BUCKET_NAME!,
     Key: key,
   });
 
-  // Generate a URL that expires in 1 hour
   return getSignedUrl(s3Client, command, { expiresIn: 3600 });
 }
 
-// Fix the downloadFromS3 function to use the legacy SDK
+// Use v2 for downloads
 export async function downloadFromS3(key: string, localPath: string): Promise<void> {
   const response = await s3Legacy.getObject({
     Bucket: process.env.AWS_BUCKET_NAME!,
