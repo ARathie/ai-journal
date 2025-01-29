@@ -4,8 +4,10 @@ import { transcribeAudio } from '../utils/openai';
 import { getAudioUrl } from '../utils/s3';
 import { uploadToS3 } from '../utils/s3';
 import { upload } from '../utils/multer';
+import { PrismaClient } from '@prisma/client';
 
 const router = express.Router();
+const prisma = new PrismaClient();
 
 router.get('/test', (req, res) => {
   res.json({ message: 'Entries router is working' });
@@ -81,26 +83,77 @@ router.post('/:entryId/record-chunk', upload.single('audio'), async (req, res) =
       return res.status(400).json({ error: 'No audio file provided' });
     }
 
-    // Upload to S3
-    const key = await uploadToS3(
+    // First, ensure we have a default user
+    let user = await prisma.user.findFirst();
+    
+    // If no user exists, create a default one
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          email: 'default@example.com',
+          passwordHash: 'default_hash_for_testing_only',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+      });
+    }
+
+    // Now check for journal entry
+    let journalEntry = await prisma.journalEntry.findUnique({
+      where: { id: entryId }
+    });
+
+    // If it doesn't exist, create it with user connection
+    if (!journalEntry) {
+      journalEntry = await prisma.journalEntry.create({
+        data: {
+          id: entryId,
+          content: '',
+          userId: user.id,  // Direct userId assignment
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+      });
+    }
+
+    // Upload audio to S3
+    const audioKey = await uploadToS3(
       req.file.buffer,
       req.file.originalname,
       req.file.mimetype,
       entryId
     );
 
-    // Get a signed URL for the uploaded file
-    const audioUrl = await getAudioUrl(key);
-
     // Transcribe the audio
-    const transcript = await transcribeAudio(audioUrl);
+    const transcript = await transcribeAudio(
+      req.file.buffer,
+      req.file.originalname
+    );
 
-    // Here you would typically store the transcript in your database
-    // For now, we'll just return it
+    // Get the next chunk order number
+    const lastChunk = await prisma.audioChunk.findFirst({
+      where: { entryId },
+      orderBy: { chunkOrder: 'desc' }
+    });
+    const nextOrder = (lastChunk?.chunkOrder ?? -1) + 1;
+
+    // Store in AudioChunk
+    const audioChunk = await prisma.audioChunk.create({
+      data: {
+        entryId: journalEntry.id,
+        chunkOrder: nextOrder,
+        audioChunkUrl: audioKey,
+        transcript,
+        createdAt: new Date()
+      }
+    });
+
     res.json({
       success: true,
-      key,
+      audioChunkId: audioChunk.id,
+      audioKey,
       transcript,
+      chunkOrder: nextOrder,
       message: 'Audio uploaded and transcribed successfully'
     });
 
