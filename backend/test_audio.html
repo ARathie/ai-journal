@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<body>
+    <input type="file" id="audioFile" accept="audio/*">
+    <button onclick="uploadFile()">Upload</button>
+    <div id="result"></div>
+
+    <script>
+        async function uploadFile() {
+            const fileInput = document.getElementById('audioFile');
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('audio', file);
+
+            try {
+                const response = await fetch('http://localhost:3000/api/uploadTest', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+    </script>
+</body>
+</html>
