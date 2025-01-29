@@ -210,4 +210,34 @@ router.post('/:entryId/summarize', async (req, res) => {
   }
 });
 
+// Add this new route for updating journal entry content
+router.post('/:entryId', async (req, res) => {
+  try {
+    const { entryId } = req.params;
+    const { content } = req.body;
+
+    // Find and update the journal entry
+    const entry = await prisma.journalEntry.update({
+      where: { id: entryId },
+      data: {
+        content,
+        updatedAt: new Date()
+      }
+    });
+
+    res.json({
+      success: true,
+      entry,
+      message: 'Journal entry updated successfully'
+    });
+
+  } catch (error) {
+    console.error('Update entry error:', error);
+    res.status(500).json({ 
+      error: 'Failed to update journal entry',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 export default router; 
