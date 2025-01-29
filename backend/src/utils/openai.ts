@@ -39,3 +39,33 @@ export async function transcribeAudio(buffer: Buffer, filename: string): Promise
     throw error;
   }
 }
+
+export async function summarizeContent(content: string): Promise<string[]> {
+  try {
+    const completion = await openai.chat.completions.create({
+      model: process.env.GPT_MODEL || 'gpt-4o',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a helpful assistant that summarizes journal entries. Please extract 3-5 key points from the content. Return only the bullet points, one per line, without any additional text or formatting.'
+        },
+        {
+          role: 'user',
+          content: content
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: parseInt(process.env.MAX_TOKENS || '500'),
+    });
+
+    // Split the response into an array of bullet points
+    const summary = completion.choices[0].message.content?.split('\n')
+      .filter(line => line.trim()) // Remove empty lines
+      .map(line => line.replace(/^[•\-\*]\s*/, '')); // Remove bullet characters
+
+    return summary || [];
+  } catch (error) {
+    console.error('Summarization error:', error);
+    throw error;
+  }
+}

@@ -1,6 +1,6 @@
 import express from 'express';
 import { concatenateAudioFiles } from '../utils/ffmpeg';
-import { transcribeAudio } from '../utils/openai';
+import { transcribeAudio, summarizeContent } from '../utils/openai';
 import { getAudioUrl } from '../utils/s3';
 import { uploadToS3 } from '../utils/s3';
 import { upload } from '../utils/multer';
@@ -161,6 +161,50 @@ router.post('/:entryId/record-chunk', upload.single('audio'), async (req, res) =
     console.error('Record chunk error:', error);
     res.status(500).json({ 
       error: 'Failed to process audio chunk',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+router.post('/:entryId/summarize', async (req, res) => {
+  try {
+    const { entryId } = req.params;
+
+    // Fetch the journal entry
+    const entry = await prisma.journalEntry.findUnique({
+      where: { id: entryId }
+    });
+
+    if (!entry) {
+      return res.status(404).json({ error: 'Journal entry not found' });
+    }
+
+    if (!entry.content) {
+      return res.status(400).json({ error: 'No content to summarize' });
+    }
+
+    // Generate summary
+    const keyPoints = await summarizeContent(entry.content);
+
+    // Update the journal entry with key points
+    const updatedEntry = await prisma.journalEntry.update({
+      where: { id: entryId },
+      data: {
+        keyPoints,
+        updatedAt: new Date()
+      }
+    });
+
+    res.json({
+      success: true,
+      entry: updatedEntry,
+      message: 'Journal entry summarized successfully'
+    });
+
+  } catch (error) {
+    console.error('Summarization error:', error);
+    res.status(500).json({ 
+      error: 'Failed to summarize journal entry',
       details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
