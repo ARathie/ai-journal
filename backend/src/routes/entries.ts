@@ -1,5 +1,9 @@
 import express from 'express';
 import { concatenateAudioFiles } from '../utils/ffmpeg';
+import { transcribeAudio } from '../utils/openai';
+import { getAudioUrl } from '../utils/s3';
+import { uploadToS3 } from '../utils/s3';
+import { upload } from '../utils/multer';
 
 const router = express.Router();
 
@@ -64,6 +68,46 @@ router.get('/:entryId', async (req, res) => {
     console.error('Error fetching entry:', error);
     res.status(500).json({ 
       error: 'Failed to fetch entry',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+router.post('/:entryId/record-chunk', upload.single('audio'), async (req, res) => {
+  try {
+    const { entryId } = req.params;
+    
+    if (!req.file) {
+      return res.status(400).json({ error: 'No audio file provided' });
+    }
+
+    // Upload to S3
+    const key = await uploadToS3(
+      req.file.buffer,
+      req.file.originalname,
+      req.file.mimetype,
+      entryId
+    );
+
+    // Get a signed URL for the uploaded file
+    const audioUrl = await getAudioUrl(key);
+
+    // Transcribe the audio
+    const transcript = await transcribeAudio(audioUrl);
+
+    // Here you would typically store the transcript in your database
+    // For now, we'll just return it
+    res.json({
+      success: true,
+      key,
+      transcript,
+      message: 'Audio uploaded and transcribed successfully'
+    });
+
+  } catch (error) {
+    console.error('Record chunk error:', error);
+    res.status(500).json({ 
+      error: 'Failed to process audio chunk',
       details: error instanceof Error ? error.message : 'Unknown error'
     });
   }

@@ -1,5 +1,6 @@
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
+import ffprobeStatic from 'ffprobe-static';
 import { downloadFromS3, uploadToS3 } from './s3';
 import fs from 'fs';
 import path from 'path';
@@ -7,6 +8,7 @@ import os from 'os';
 
 // Configure ffmpeg and ffprobe paths
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+ffmpeg.setFfprobePath(ffprobeStatic.path);
 
 // Get ffprobe path from system installation
 const ffprobePath = '/usr/local/bin/ffprobe';  // Default Homebrew installation path
@@ -82,4 +84,6 @@ export async function concatenateAudioFiles(fileKeys: string[], entryId: string)
     console.error('Error in concatenateAudioFiles:', error);
     throw error;
   }
-} 
+}
+
+export default ffmpeg; 
