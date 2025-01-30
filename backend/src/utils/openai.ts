@@ -120,3 +120,36 @@ export async function analyzeContent(content: string): Promise<MetadataAnalysis>
     throw error;
   }
 }
+
+interface QAResponse {
+  answer: string;
+  context: any[];  // Type this better based on your Pinecone metadata
+}
+
+export async function generateAnswer(question: string, context: string): Promise<QAResponse> {
+  try {
+    const completion = await openai.chat.completions.create({
+      model: process.env.GPT_MODEL || 'gpt-4o',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a helpful assistant that answers questions about journal entries. Use the provided context to answer questions accurately and concisely.'
+        },
+        {
+          role: 'user',
+          content: `Context from journal entries:\n${context}\n\nQuestion: ${question}`
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: parseInt(process.env.MAX_TOKENS || '500')
+    });
+
+    return {
+      answer: completion.choices[0].message.content || '',
+      context: []  // This will be filled by the route
+    };
+  } catch (error) {
+    console.error('Answer generation error:', error);
+    throw error;
+  }
+}

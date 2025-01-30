@@ -6,6 +6,8 @@ import { uploadToS3 } from '../utils/s3';
 import { upload } from '../utils/multer';
 import { PrismaClient } from '@prisma/client';
 import { prisma, ensureJournalEntry } from '../utils/db';
+import { embedAndStoreEntry, queryJournal } from '../utils/embeddings';
+import { generateAnswer } from '../utils/openai';
 
 const router = express.Router();
 const prismaClient = new PrismaClient();
@@ -210,6 +212,11 @@ router.post('/:entryId', async (req, res) => {
       });
     }
 
+    // After updating content, store embeddings
+    if (content) {
+      await embedAndStoreEntry(entry.id, content);
+    }
+
     res.json({
       success: true,
       entry,
@@ -220,6 +227,42 @@ router.post('/:entryId', async (req, res) => {
     console.error('Update entry error:', error);
     res.status(500).json({ 
       error: 'Failed to update journal entry',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// New Q&A route
+router.post('/qna', async (req, res) => {
+  try {
+    const { question } = req.body;
+
+    if (!question) {
+      return res.status(400).json({ error: 'Question is required' });
+    }
+
+    // Get relevant chunks from Pinecone
+    const matches = await queryJournal(question);
+
+    // Combine chunks into context
+    const context = matches
+      .map(match => match.metadata?.snippet)
+      .filter(Boolean)
+      .join('\n\n');
+
+    // Generate answer
+    const response = await generateAnswer(question, context);
+
+    res.json({
+      success: true,
+      answer: response.answer,
+      context: matches.map(m => m.metadata)
+    });
+
+  } catch (error) {
+    console.error('Q&A error:', error);
+    res.status(500).json({ 
+      error: 'Failed to process question',
       details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
