@@ -1,6 +1,6 @@
 import express from 'express';
 import { concatenateAudioFiles } from '../utils/ffmpeg';
-import { transcribeAudio, summarizeContent } from '../utils/openai';
+import { transcribeAudio, summarizeContent, analyzeContent } from '../utils/openai';
 import { getAudioUrl } from '../utils/s3';
 import { uploadToS3 } from '../utils/s3';
 import { upload } from '../utils/multer';
@@ -216,8 +216,8 @@ router.post('/:entryId', async (req, res) => {
     const { entryId } = req.params;
     const { content } = req.body;
 
-    // Find and update the journal entry
-    const entry = await prisma.journalEntry.update({
+    // First, update the content
+    let entry = await prisma.journalEntry.update({
       where: { id: entryId },
       data: {
         content,
@@ -225,10 +225,27 @@ router.post('/:entryId', async (req, res) => {
       }
     });
 
+    // Then analyze the content
+    if (content) {
+      const analysis = await analyzeContent(content);
+      
+      // Update entry with analysis
+      entry = await prisma.journalEntry.update({
+        where: { id: entryId },
+        data: {
+          sentiment: String(analysis.sentiment),  // Store as string since that's how we defined it
+          emotionTags: analysis.emotionTags,
+          topicTags: analysis.topicTags,
+          namedEntities: analysis.namedEntities,
+          updatedAt: new Date()
+        }
+      });
+    }
+
     res.json({
       success: true,
       entry,
-      message: 'Journal entry updated successfully'
+      message: 'Journal entry updated and analyzed successfully'
     });
 
   } catch (error) {

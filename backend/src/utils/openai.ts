@@ -69,3 +69,54 @@ export async function summarizeContent(content: string): Promise<string[]> {
     throw error;
   }
 }
+
+interface MetadataAnalysis {
+  sentiment: number;
+  emotionTags: string[];
+  topicTags: string[];
+  namedEntities: string[];
+}
+
+export async function analyzeContent(content: string): Promise<MetadataAnalysis> {
+  try {
+    const completion = await openai.chat.completions.create({
+      model: process.env.GPT_MODEL || 'gpt-4o',
+      messages: [
+        {
+          role: 'system',
+          content: `You are an AI that analyzes journal entries. For the given text, provide:
+          1. A sentiment score from -3 (very negative) to +3 (very positive), with 0 being neutral
+          2. Emotion tags (e.g., happy, anxious, proud)
+          3. Topic tags (e.g., work, technology, relationships)
+          4. Named entities (people, places, organizations mentioned)
+          
+          Return the analysis in this exact JSON format:
+          {
+            "sentiment": number,
+            "emotionTags": string[],
+            "topicTags": string[],
+            "namedEntities": string[]
+          }`
+        },
+        {
+          role: 'user',
+          content: content
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: parseInt(process.env.MAX_TOKENS || '500'),
+      response_format: { type: "json_object" }  // Ensure JSON response
+    });
+
+    const analysis = JSON.parse(completion.choices[0].message.content || '{}');
+    return {
+      sentiment: analysis.sentiment || 0,
+      emotionTags: analysis.emotionTags || [],
+      topicTags: analysis.topicTags || [],
+      namedEntities: analysis.namedEntities || []
+    };
+  } catch (error) {
+    console.error('Analysis error:', error);
+    throw error;
+  }
+}
