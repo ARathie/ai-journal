@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 import uploadRouter from './routes/upload';
 import entriesRouter from './routes/entries';
+import { initializePinecone } from './utils/embeddings';
 
 // Load environment variables
 dotenv.config();
@@ -39,9 +40,21 @@ app.get('/health', (req, res) => {
 // Define port
 const PORT = process.env.PORT || 3000;
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`Server is running in ${process.env.NODE_ENV} mode on port ${PORT}`);
-});
+// Start server with async initialization
+async function startServer() {
+  try {
+    // Initialize Pinecone before starting the server
+    await initializePinecone();
+    
+    app.listen(PORT, () => {
+      console.log(`Server is running in ${process.env.NODE_ENV} mode on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+startServer();
 
 export default app;
