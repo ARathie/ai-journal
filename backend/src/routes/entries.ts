@@ -5,9 +5,10 @@ import { getAudioUrl } from '../utils/s3';
 import { uploadToS3 } from '../utils/s3';
 import { upload } from '../utils/multer';
 import { PrismaClient } from '@prisma/client';
+import { prisma, ensureJournalEntry } from '../utils/db';
 
 const router = express.Router();
-const prisma = new PrismaClient();
+const prismaClient = new PrismaClient();
 
 router.get('/test', (req, res) => {
   res.json({ message: 'Entries router is working' });
@@ -83,38 +84,8 @@ router.post('/:entryId/record-chunk', upload.single('audio'), async (req, res) =
       return res.status(400).json({ error: 'No audio file provided' });
     }
 
-    // First, ensure we have a default user
-    let user = await prisma.user.findFirst();
-    
-    // If no user exists, create a default one
-    if (!user) {
-      user = await prisma.user.create({
-        data: {
-          email: 'default@example.com',
-          passwordHash: 'default_hash_for_testing_only',
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }
-      });
-    }
-
-    // Now check for journal entry
-    let journalEntry = await prisma.journalEntry.findUnique({
-      where: { id: entryId }
-    });
-
-    // If it doesn't exist, create it with user connection
-    if (!journalEntry) {
-      journalEntry = await prisma.journalEntry.create({
-        data: {
-          id: entryId,
-          content: '',
-          userId: user.id,  // Direct userId assignment
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }
-      });
-    }
+    // Ensure journal entry exists
+    const journalEntry = await ensureJournalEntry(entryId);
 
     // Upload audio to S3
     const audioKey = await uploadToS3(
@@ -170,14 +141,8 @@ router.post('/:entryId/summarize', async (req, res) => {
   try {
     const { entryId } = req.params;
 
-    // Fetch the journal entry
-    const entry = await prisma.journalEntry.findUnique({
-      where: { id: entryId }
-    });
-
-    if (!entry) {
-      return res.status(404).json({ error: 'Journal entry not found' });
-    }
+    // Ensure entry exists
+    const entry = await ensureJournalEntry(entryId);
 
     if (!entry.content) {
       return res.status(400).json({ error: 'No content to summarize' });
@@ -186,7 +151,7 @@ router.post('/:entryId/summarize', async (req, res) => {
     // Generate summary
     const keyPoints = await summarizeContent(entry.content);
 
-    // Update the journal entry with key points
+    // Update the entry
     const updatedEntry = await prisma.journalEntry.update({
       where: { id: entryId },
       data: {
@@ -216,24 +181,27 @@ router.post('/:entryId', async (req, res) => {
     const { entryId } = req.params;
     const { content } = req.body;
 
-    // First, update the content
-    let entry = await prisma.journalEntry.update({
-      where: { id: entryId },
-      data: {
-        content,
-        updatedAt: new Date()
-      }
-    });
+    // Get or create the entry
+    let entry = await ensureJournalEntry(entryId, content);
 
-    // Then analyze the content
+    // Update if it already existed
+    if (entry.content !== content) {
+      entry = await prisma.journalEntry.update({
+        where: { id: entryId },
+        data: { 
+          content,
+          updatedAt: new Date()
+        }
+      });
+    }
+
+    // Analyze content
     if (content) {
       const analysis = await analyzeContent(content);
-      
-      // Update entry with analysis
       entry = await prisma.journalEntry.update({
         where: { id: entryId },
         data: {
-          sentiment: String(analysis.sentiment),  // Store as string since that's how we defined it
+          sentiment: String(analysis.sentiment),
           emotionTags: analysis.emotionTags,
           topicTags: analysis.topicTags,
           namedEntities: analysis.namedEntities,
