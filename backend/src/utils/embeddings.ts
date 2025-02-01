@@ -74,7 +74,21 @@ export async function embedAndStoreEntry(entryId: string, content: string) {
   if (!index) throw new Error('Pinecone not initialized');
   const chunks = splitIntoChunks(content);
   
-  // Generate embeddings for all chunks
+  // First, store chunks in the database
+  await Promise.all(chunks.map(async (chunk, index) => {
+    await prisma.journalChunk.create({
+      data: {
+        entry_id: entryId,
+        chunk_index: index,
+        start_offset: chunk.startOffset,
+        end_offset: chunk.endOffset,
+        snippet: chunk.text.slice(0, 100),
+        chunk_text: chunk.text,
+      }
+    });
+  }));
+  
+  // Then generate embeddings and store in Pinecone
   const embeddingPromises = chunks.map(async (chunk, index) => {
     const embedding = await openai.embeddings.create({
       model: 'text-embedding-3-small',
@@ -96,8 +110,6 @@ export async function embedAndStoreEntry(entryId: string, content: string) {
   });
 
   const vectors = await Promise.all(embeddingPromises);
-  
-  // Upsert to Pinecone
   await index.upsert(vectors);
 }
 
