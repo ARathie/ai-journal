@@ -7,7 +7,7 @@ import { upload } from '../utils/multer';
 import { PrismaClient } from '@prisma/client';
 import { prisma, ensureJournalEntry } from '../utils/db';
 import { embedAndStoreEntry, queryJournal } from '../utils/embeddings';
-import { generateAnswer } from '../utils/openai';
+import openai from '../utils/openai';
 
 const router = express.Router();
 const prismaClient = new PrismaClient();
@@ -233,7 +233,7 @@ router.post('/:entryId', async (req, res) => {
 });
 
 // New Q&A route
-router.post('/qna', async (req, res) => {
+router.post('/search/qna', async (req, res) => {
   try {
     const { question } = req.body;
 
@@ -250,12 +250,23 @@ router.post('/qna', async (req, res) => {
       .filter(Boolean)
       .join('\n\n');
 
-    // Generate answer
-    const response = await generateAnswer(question, context);
+    // Generate answer using GPT-4
+    const completion = await openai.chat.completions.create({
+      model: process.env.GPT_MODEL || 'gpt-4',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a helpful assistant that answers questions about journal entries. Use the provided context to answer questions accurately and concisely.'
+        },
+        {
+          role: 'user',
+          content: `Context from journal entries:\n${context}\n\nQuestion: ${question}`
+        }
+      ]
+    });
 
     res.json({
-      success: true,
-      answer: response.answer,
+      answer: completion.choices[0].message.content,
       context: matches.map(m => m.metadata)
     });
 

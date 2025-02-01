@@ -1,6 +1,7 @@
 import { Pinecone } from '@pinecone-database/pinecone';
 import openai from './openai';
 import dotenv from 'dotenv';
+import { prisma } from './db';
 
 dotenv.config();
 
@@ -13,10 +14,9 @@ const INDEX_NAME = 'journal-entries';
 // Function to ensure index exists
 async function ensureIndex() {
   try {
-    const indexList = await pinecone.listIndexes();
+    const indexes = await pinecone.listIndexes();
     
-    // Check if our index exists in the returned list
-    if (!indexList?.indexes?.some(index => index.name === INDEX_NAME)) {
+    if (!indexes?.indexes?.some(index => index.name === INDEX_NAME)) {
       console.log('Creating new Pinecone index...');
       
       await pinecone.createIndex({
@@ -35,12 +35,12 @@ async function ensureIndex() {
     }
   } catch (error) {
     console.error('Error ensuring index exists:', error);
-    throw error;  // Re-throw to handle in app startup
+    throw error;
   }
 }
 
 // Initialize Pinecone with index
-let index: any;  // We'll type this properly once initialized
+let index: any;
 
 export async function initializePinecone() {
   await ensureIndex();

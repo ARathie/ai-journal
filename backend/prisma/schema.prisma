@@ -37,6 +37,7 @@ model JournalEntry {
   namedEntities   String[]     @default([])
   keyPoints       String[]     @default([])
   audioChunks     AudioChunk[]
+  journalChunks   JournalChunk[]
   user            User          @relation(fields: [userId], references: [id])
 
   @@map("journal_entries")
@@ -52,4 +53,20 @@ model AudioChunk {
   journalEntry    JournalEntry @relation(fields: [entryId], references: [id])
 
   @@map("audio_chunks")
+}
+
+model JournalChunk {
+  chunk_id      String       @id @default(uuid())
+  entry_id      String
+  chunk_index   Int
+  start_offset  Int
+  end_offset    Int
+  snippet       String?
+  chunk_text    String?
+  created_at    DateTime     @default(now())
+  updated_at    DateTime     @updatedAt
+
+  journalEntry  JournalEntry @relation(fields: [entry_id], references: [id])
+
+  @@map("journal_chunks")
 }
