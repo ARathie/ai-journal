@@ -19,7 +19,7 @@ router.get('/test', (req, res) => {
 router.post('/:entryId/concatenate', async (req, res) => {
   try {
     const { fileKeys } = req.body;
-    const { entryId } = req.params;  // This should now be a date-based ID
+    const { entryId } = req.params;
 
     if (!fileKeys || fileKeys.length === 0) {
       return res.json({ 
@@ -184,7 +184,7 @@ router.post('/:entryId', async (req, res) => {
     const { content } = req.body;
 
     // Get or create the entry
-    let entry = await ensureJournalEntry(entryId, content);
+    let entry = await ensureJournalEntry(entryId);
 
     // Update if it already existed
     if (entry.content !== content) {
@@ -210,10 +210,8 @@ router.post('/:entryId', async (req, res) => {
           updatedAt: new Date()
         }
       });
-    }
 
-    // After updating content, store embeddings
-    if (content) {
+      // After updating content, store embeddings and chunks
       await embedAndStoreEntry(entry.id, content);
     }
 
@@ -244,10 +242,22 @@ router.post('/search/qna', async (req, res) => {
     // Get relevant chunks from Pinecone
     const matches = await queryJournal(question);
 
-    // Combine chunks into context
-    const context = matches
-      .map(match => match.metadata?.snippet)
+    // Fetch full chunks from database
+    const chunks = await Promise.all(
+      matches.map(match => 
+        prisma.journalChunk.findFirst({
+          where: {
+            entry_id: match.metadata.entry_id,
+            chunk_index: match.metadata.chunk_index
+          }
+        })
+      )
+    );
+
+    // Build context from full chunks
+    const context = chunks
       .filter(Boolean)
+      .map(chunk => chunk?.chunk_text)
       .join('\n\n');
 
     // Generate answer using GPT-4
@@ -256,18 +266,18 @@ router.post('/search/qna', async (req, res) => {
       messages: [
         {
           role: 'system',
-          content: 'You are a helpful assistant that answers questions about journal entries. Use the provided context to answer questions accurately and concisely.'
+          content: 'You are a helpful assistant answering questions about my journal entries. Use the provided context to answer questions accurately and concisely. Frame your responses in a personal way, as you are helping me understand my own journal entries.'
         },
         {
           role: 'user',
-          content: `Context from journal entries:\n${context}\n\nQuestion: ${question}`
+          content: `Context from my journal entries:\n${context}\n\nQuestion: ${question}`
         }
       ]
     });
 
     res.json({
       answer: completion.choices[0].message.content,
-      context: matches.map(m => m.metadata)
+      context: matches.map(m => m.metadata)  // Keep snippets for preview
     });
 
   } catch (error) {
