@@ -78,6 +78,56 @@ router.get('/:entryId', async (req, res) => {
   }
 });
 
+router.post('/:entryId', async (req, res) => {
+  try {
+    const { entryId } = req.params;
+    const { content } = req.body;
+
+    // Get or create the entry
+    let entry = await ensureJournalEntry(entryId);
+
+    // Update if it already existed
+    if (entry.content !== content) {
+      // Generate all metadata at once
+      const [analysis, keyPoints] = await Promise.all([
+        analyzeContent(content),
+        summarizeContent(content)
+      ]);
+
+      // Update entry with all metadata
+      entry = await prisma.journalEntry.update({
+        where: { id: entryId },
+        data: { 
+          content,
+          sentiment: String(analysis.sentiment),
+          emotionTags: analysis.emotionTags,
+          topicTags: analysis.topicTags,
+          namedEntities: analysis.namedEntities,
+          keyPoints,
+          updatedAt: new Date()
+        }
+      });
+
+      // After updating content and metadata, store embeddings and chunks
+      await embedAndStoreEntry(entry.id, content);
+    }
+
+    res.json({
+      success: true,
+      entry,
+      message: 'Journal entry updated and analyzed successfully'
+    });
+
+  } catch (error) {
+    console.error('Update entry error:', error);
+    res.status(500).json({ 
+      error: 'Failed to update journal entry',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// For voice recordings, update the content which will trigger metadata generation
 router.post('/:entryId/record-chunk', upload.single('audio'), async (req, res) => {
   try {
     const { entryId } = req.params;
@@ -121,13 +171,37 @@ router.post('/:entryId/record-chunk', upload.single('audio'), async (req, res) =
       }
     });
 
+    // Generate all metadata at once
+    const [analysis, keyPoints] = await Promise.all([
+      analyzeContent(transcript),
+      summarizeContent(transcript)
+    ]);
+
+    // Update the journal entry with content and all metadata
+    const entry = await prisma.journalEntry.update({
+      where: { id: entryId },
+      data: { 
+        content: transcript,
+        sentiment: String(analysis.sentiment),
+        emotionTags: analysis.emotionTags,
+        topicTags: analysis.topicTags,
+        namedEntities: analysis.namedEntities,
+        keyPoints,
+        updatedAt: new Date()
+      }
+    });
+
+    // Store embeddings and chunks
+    await embedAndStoreEntry(entry.id, transcript);
+
     res.json({
       success: true,
       audioChunkId: audioChunk.id,
       audioKey,
       transcript,
       chunkOrder: nextOrder,
-      message: 'Audio uploaded and transcribed successfully'
+      entry,
+      message: 'Audio uploaded, transcribed, and analyzed successfully'
     });
 
   } catch (error) {
@@ -172,59 +246,6 @@ router.post('/:entryId/summarize', async (req, res) => {
     console.error('Summarization error:', error);
     res.status(500).json({ 
       error: 'Failed to summarize journal entry',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-});
-
-// Add this new route for updating journal entry content
-router.post('/:entryId', async (req, res) => {
-  try {
-    const { entryId } = req.params;
-    const { content } = req.body;
-
-    // Get or create the entry
-    let entry = await ensureJournalEntry(entryId);
-
-    // Update if it already existed
-    if (entry.content !== content) {
-      entry = await prisma.journalEntry.update({
-        where: { id: entryId },
-        data: { 
-          content,
-          updatedAt: new Date()
-        }
-      });
-    }
-
-    // Analyze content
-    if (content) {
-      const analysis = await analyzeContent(content);
-      entry = await prisma.journalEntry.update({
-        where: { id: entryId },
-        data: {
-          sentiment: String(analysis.sentiment),
-          emotionTags: analysis.emotionTags,
-          topicTags: analysis.topicTags,
-          namedEntities: analysis.namedEntities,
-          updatedAt: new Date()
-        }
-      });
-
-      // After updating content, store embeddings and chunks
-      await embedAndStoreEntry(entry.id, content);
-    }
-
-    res.json({
-      success: true,
-      entry,
-      message: 'Journal entry updated and analyzed successfully'
-    });
-
-  } catch (error) {
-    console.error('Update entry error:', error);
-    res.status(500).json({ 
-      error: 'Failed to update journal entry',
       details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
