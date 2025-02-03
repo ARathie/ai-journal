@@ -242,22 +242,36 @@ router.post('/search/qna', async (req, res) => {
     // Get relevant chunks from Pinecone
     const matches = await queryJournal(question);
 
-    // Fetch full chunks from database
+    // Fetch full chunks from database with their entry dates
     const chunks = await Promise.all(
       matches.map(match => 
         prisma.journalChunk.findFirst({
           where: {
             entry_id: match.metadata.entry_id,
             chunk_index: match.metadata.chunk_index
+          },
+          include: {
+            journalEntry: {
+              select: {
+                createdAt: true
+              }
+            }
           }
         })
       )
     );
 
-    // Build context from full chunks
+    // Build context with dates
     const context = chunks
       .filter(Boolean)
-      .map(chunk => chunk?.chunk_text)
+      .map(chunk => {
+        const date = chunk?.journalEntry?.createdAt.toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+        return `[Entry from ${date}]:\n${chunk?.chunk_text}`;
+      })
       .join('\n\n');
 
     // Generate answer using GPT-4
@@ -266,7 +280,7 @@ router.post('/search/qna', async (req, res) => {
       messages: [
         {
           role: 'system',
-          content: 'You are a helpful assistant answering questions about my journal entries. Use the provided context to answer questions accurately and concisely. Frame your responses in a personal way, as you are helping me understand my own journal entries.'
+          content: 'You are a helpful assistant answering questions about my journal entries. Use the provided context to answer questions accurately and concisely. Frame your responses in a personal way, as you are helping me understand my own journal entries. Always reference the dates of the entries you are drawing information from, especially when discussing events, feelings, or changes over time.'
         },
         {
           role: 'user',
@@ -277,7 +291,7 @@ router.post('/search/qna', async (req, res) => {
 
     res.json({
       answer: completion.choices[0].message.content,
-      context: matches.map(m => m.metadata)  // Keep snippets for preview
+      context: matches.map(m => m.metadata)
     });
 
   } catch (error) {
