@@ -81,13 +81,13 @@ router.get('/:entryId', async (req, res) => {
 router.post('/:entryId', async (req, res) => {
   try {
     const { entryId } = req.params;
-    const { content } = req.body;
+    const { content, title } = req.body;
 
     // Get or create the entry
     let entry = await ensureJournalEntry(entryId);
 
     // Update if it already existed
-    if (entry.content !== content) {
+    if (entry.content !== content || entry.title !== title) {
       // Generate all metadata at once
       const [analysis, keyPoints] = await Promise.all([
         analyzeContent(content),
@@ -99,6 +99,7 @@ router.post('/:entryId', async (req, res) => {
         where: { id: entryId },
         data: { 
           content,
+          title,
           sentiment: String(analysis.sentiment),
           emotionTags: analysis.emotionTags,
           topicTags: analysis.topicTags,
@@ -131,6 +132,7 @@ router.post('/:entryId', async (req, res) => {
 router.post('/:entryId/record-chunk', upload.single('audio'), async (req, res) => {
   try {
     const { entryId } = req.params;
+    const { title } = req.body;
     
     if (!req.file) {
       return res.status(400).json({ error: 'No audio file provided' });
@@ -182,6 +184,7 @@ router.post('/:entryId/record-chunk', upload.single('audio'), async (req, res) =
       where: { id: entryId },
       data: { 
         content: transcript,
+        title,
         sentiment: String(analysis.sentiment),
         emotionTags: analysis.emotionTags,
         topicTags: analysis.topicTags,
