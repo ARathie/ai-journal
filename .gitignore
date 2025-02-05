@@ -41,6 +41,9 @@ DerivedData
 *.ipa
 *.xcuserstate
 **/.xcode.env.local
+*.xcworkspace
+!*.xcworkspace/contents.xcworkspacedata
+Podfile.lock
 
 # Android/IntelliJ
 #
@@ -53,6 +56,8 @@ local.properties
 .cxx/
 *.keystore
 !debug.keystore
+google-services.json
+*.aab
 
 # node.js
 #
@@ -78,6 +83,7 @@ yarn-error.log
 # Ruby / CocoaPods
 **/Pods/
 /vendor/bundle/
+*.xcconfig
 
 # Temporary files created by Metro to check the health of the file watcher
 .metro-health-check*
@@ -92,3 +98,28 @@ yarn-error.log
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+# Logs and databases
+*.log
+*.sqlite
+
+# Build outputs
+dist/
+build/
+
+# Cache directories
+.cache/
+.eslintcache
+.npm
+
+# Ruby vendor files
+vendor/
+frontend/vendor/
+**/vendor/bundle/
+
+# Additional files to ignore
+.bundle/
+package-lock.json
+Gemfile.lock
+gradle-wrapper.jar
+
