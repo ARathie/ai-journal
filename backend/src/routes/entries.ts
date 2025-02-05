@@ -12,6 +12,21 @@ import openai from '../utils/openai';
 const router = express.Router();
 const prismaClient = new PrismaClient();
 
+interface Match {
+    metadata: {
+        entry_id: string;
+        chunk_index: number;
+    };
+}
+
+interface QueryParams {
+  page?: string;
+  limit?: string;
+  startDate?: string;
+  endDate?: string;
+  userId: string;  // Will come from auth middleware
+}
+
 router.get('/test', (req, res) => {
   res.json({ message: 'Entries router is working' });
 });
@@ -268,7 +283,7 @@ router.post('/search/qna', async (req, res) => {
 
     // Fetch full chunks from database with their entry dates
     const chunks = await Promise.all(
-      matches.map(match => 
+      matches.map((match: Match) => 
         prisma.journalChunk.findFirst({
           where: {
             entry_id: match.metadata.entry_id,
@@ -315,13 +330,72 @@ router.post('/search/qna', async (req, res) => {
 
     res.json({
       answer: completion.choices[0].message.content,
-      context: matches.map(m => m.metadata)
+      context: matches.map((match: { metadata: any }) => match.metadata)
     });
 
   } catch (error) {
     console.error('Q&A error:', error);
     res.status(500).json({ 
       error: 'Failed to process question',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+router.get('/list', async (req, res) => {
+  try {
+    const {
+      limit = '20',
+      cursor, // This will be the createdAt timestamp of the last item
+    } = req.query as { limit?: string; cursor?: string };
+
+    // TODO: Get userId from auth middleware
+    const userId = 'test-user'; // Temporary! Remove when auth is implemented
+
+    // Build where clause
+    const where = {
+      userId,
+      ...(cursor ? {
+        createdAt: {
+          lt: new Date(cursor) // Get items created before the cursor
+        }
+      } : {})
+    };
+
+    // Get entries
+    const entries = await prisma.journalEntry.findMany({
+      where,
+      orderBy: {
+        createdAt: 'desc'
+      },
+      take: parseInt(limit) + 1, // Take one extra to know if there are more
+      select: {
+        id: true,
+        title: true,
+        content: true,
+        createdAt: true,
+        keyPoints: true,
+        sentiment: true,
+        emotionTags: true,
+        topicTags: true
+      }
+    });
+    
+    // Check if there are more entries
+    const hasMore = entries.length > parseInt(limit);
+    const items = hasMore ? entries.slice(0, -1) : entries;
+    const nextCursor = hasMore ? entries[entries.length - 2].createdAt.toISOString() : undefined;
+    
+    res.json({
+      entries: items,
+      nextCursor,
+      hasMore
+    });
+
+  } catch (error) {
+    console.error('Error fetching entries:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch entries',
       details: error instanceof Error ? error.message : 'Unknown error'
     });
   }

@@ -1,10 +1,10 @@
 import React from 'react';
 import {View, Text, StyleSheet} from 'react-native';
 
-export default function JournalScreen() {
+export default function NewEntryScreen() {
   return (
     <View style={styles.container}>
-      <Text>Journal Screen</Text>
+      <Text>New Entry Screen</Text>
     </View>
   );
 }

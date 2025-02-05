@@ -1,10 +1,10 @@
 import React from 'react';
 import {View, Text, StyleSheet} from 'react-native';
 
-export default function JournalScreen() {
+export default function CalendarScreen() {
   return (
     <View style={styles.container}>
-      <Text>Journal Screen</Text>
+      <Text>Calendar Screen</Text>
     </View>
   );
 }
