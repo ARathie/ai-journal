@@ -123,3 +123,8 @@ package-lock.json
 Gemfile.lock
 gradle-wrapper.jar
 
+# Android/IntelliJ specific
+frontend/android/app/debug.keystore
+*.keystore
+!debug.keystore
+
