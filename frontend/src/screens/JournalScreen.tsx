@@ -48,14 +48,27 @@ export default function JournalScreen({navigation}) {
 
       setLoading(true);
       const cursor = shouldRefresh ? '' : nextCursor;
-      const url = `http://localhost:3000/api/entries/list?limit=20${
+      const url = `http://192.168.1.95:3000/api/entries/list?limit=20${
         cursor ? `&cursor=${cursor}` : ''
       }`;
 
+      console.log('Fetching entries from:', url);
+
       const response = await fetch(url);
-      if (!response.ok) throw new Error('Failed to fetch entries');
+      console.log('Response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        throw new Error(`Failed to fetch entries: ${errorText}`);
+      }
 
       const data: ApiResponse = await response.json();
+      console.log('Received data:', {
+        entriesCount: data.entries.length,
+        hasMore: data.hasMore,
+        nextCursor: data.nextCursor,
+      });
 
       setEntries(prevEntries =>
         shouldRefresh ? data.entries : [...prevEntries, ...data.entries],
@@ -63,8 +76,8 @@ export default function JournalScreen({navigation}) {
       setNextCursor(data.nextCursor);
       setHasMore(data.hasMore);
     } catch (err) {
+      console.error('Detailed fetch error:', err);
       setError(err instanceof Error ? err.message : 'Failed to load entries');
-      console.error('Error fetching entries:', err);
     } finally {
       setLoading(false);
       setRefreshing(false);

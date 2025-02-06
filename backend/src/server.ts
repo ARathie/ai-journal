@@ -24,9 +24,9 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Routes
-app.use('/api', uploadRouter);
-app.use('/api/entries', entriesRouter);
+// Routes - Change the order and paths
+app.use('/api/entries', entriesRouter);  // More specific route first
+app.use('/api/upload', uploadRouter);    // Change upload path to be more specific
 
 // Basic health check route
 app.get('/', (req, res) => {

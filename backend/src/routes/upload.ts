@@ -52,7 +52,7 @@ const s3 = new AWS.S3({
 });
 
 // Test AWS connection
-router.get('/test-aws', async (req, res) => {
+router.get('/upload/test-aws', async (req, res) => {
   try {
     console.log('Testing AWS credentials...');
     const buckets = await s3.listBuckets().promise();
@@ -70,7 +70,7 @@ router.get('/test-aws', async (req, res) => {
 });
 
 // Get signed URL
-router.get('/test-file/:key(*)', async (req, res) => {
+router.get('/upload/test-file/:key(*)', async (req, res) => {
   try {
     console.log('Getting signed URL for:', req.params.key);
     
@@ -92,7 +92,7 @@ router.get('/test-file/:key(*)', async (req, res) => {
 });
 
 // Upload file with organized structure
-router.post('/uploadTest', upload.single('audio'), async (req, res) => {
+router.post('/upload/uploadTest', upload.single('audio'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });

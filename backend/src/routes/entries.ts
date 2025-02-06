@@ -4,13 +4,36 @@ import { transcribeAudio, summarizeContent, analyzeContent } from '../utils/open
 import { getAudioUrl } from '../utils/s3';
 import { uploadToS3 } from '../utils/s3';
 import { upload } from '../utils/multer';
-import { PrismaClient } from '@prisma/client';
 import { prisma, ensureJournalEntry } from '../utils/db';
 import { embedAndStoreEntry, queryJournal } from '../utils/embeddings';
 import openai from '../utils/openai';
 
+console.log('Entries router loaded');
+
 const router = express.Router();
-const prismaClient = new PrismaClient();
+
+// Add middleware to log all requests
+router.use((req, res, next) => {
+  console.log('Request received:', {
+    method: req.method,
+    path: req.path,
+    query: req.query
+  });
+  next();
+});
+
+// Add this near the top, right after creating the router
+router.use((req, res, next) => {
+  console.log('Request details:', {
+    method: req.method,
+    path: req.path,
+    params: req.params,
+    baseUrl: req.baseUrl,
+    originalUrl: req.originalUrl,
+    route: req.route
+  });
+  next();
+});
 
 interface Match {
     metadata: {
@@ -27,8 +50,116 @@ interface QueryParams {
   userId: string;  // Will come from auth middleware
 }
 
-router.get('/test', (req, res) => {
-  res.json({ message: 'Entries router is working' });
+router.get('/list-test', async (req, res) => {
+  console.log('Hit /list-test route');
+  res.json({ 
+    message: 'List endpoint hit correctly',
+    entries: [],
+    hasMore: false,
+    nextCursor: null
+  });
+});
+
+router.get('/list', async (req, res) => {
+  console.log('Hit /list route');
+  try {
+    console.log('Received request for entries list');
+    const {
+      limit = '20',
+      cursor,
+    } = req.query as { limit?: string; cursor?: string };
+
+    console.log('Query params:', { limit, cursor });
+
+    // TODO: Get userId from auth middleware
+    const userId = 'test-user'; // Temporary! Remove when auth is implemented
+
+    // Add this debug log
+    const entriesCount = await prisma.journalEntry.count();
+    console.log('Total entries in database:', entriesCount);
+
+    // Build where clause
+    const where = {
+      userId,
+      ...(cursor ? {
+        createdAt: {
+          lt: new Date(cursor) // Get items created before the cursor
+        }
+      } : {})
+    };
+
+    // Get entries
+    const entries = await prisma.journalEntry.findMany({
+      where,
+      orderBy: {
+        createdAt: 'desc'
+      },
+      take: parseInt(limit) + 1, // Take one extra to know if there are more
+      select: {
+        id: true,
+        title: true,
+        content: true,
+        createdAt: true,
+        keyPoints: true,
+        sentiment: true,
+        emotionTags: true,
+        topicTags: true
+      }
+    });
+    
+    // Check if there are more entries
+    const hasMore = entries.length > parseInt(limit);
+    const items = hasMore ? entries.slice(0, -1) : entries;
+    const nextCursor = hasMore ? entries[entries.length - 2].createdAt.toISOString() : undefined;
+    
+    console.log('Sending response:', {
+      entriesCount: items.length,
+      hasMore,
+      nextCursor
+    });
+    
+    res.json({
+      entries: items,
+      nextCursor,
+      hasMore
+    });
+
+  } catch (error) {
+    console.error('Error fetching entries:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch entries',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+router.get('/:entryId', async (req, res) => {
+  console.log('Hit /:entryId route with:', req.params.entryId);
+  try {
+    const { entryId } = req.params;
+    
+    // Only handle actual entry IDs (e.g., UUIDs or numbers)
+    if (entryId === 'list' || entryId === 'list-test') {
+      return res.status(404).json({ error: 'Route not found' });
+    }
+    
+    // Here you would fetch entry details from your database
+    const entry = await prisma.journalEntry.findUnique({
+      where: { id: entryId }
+    });
+
+    if (!entry) {
+      return res.status(404).json({ error: 'Entry not found' });
+    }
+
+    res.json(entry);
+  } catch (error) {
+    console.error('Error fetching entry:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch entry',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
 });
 
 router.post('/:entryId/concatenate', async (req, res) => {
@@ -64,30 +195,6 @@ router.post('/:entryId/concatenate', async (req, res) => {
     console.error('Concatenation error:', error);
     res.status(500).json({ 
       error: 'Failed to concatenate audio files',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-});
-
-// You might also want to add a route to get entry details
-router.get('/:entryId', async (req, res) => {
-  try {
-    const { entryId } = req.params;
-    
-    // Here you would fetch entry details from your database
-    // Including both text content and audio file key (if exists)
-    
-    res.json({
-      id: entryId,
-      text: "Sample entry text",
-      audioKey: "audio/merged/123.m4a", // null if no audio
-      createdAt: new Date(),
-      // ... other entry details
-    });
-  } catch (error) {
-    console.error('Error fetching entry:', error);
-    res.status(500).json({ 
-      error: 'Failed to fetch entry',
       details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
@@ -342,63 +449,12 @@ router.post('/search/qna', async (req, res) => {
   }
 });
 
-router.get('/list', async (req, res) => {
-  try {
-    const {
-      limit = '20',
-      cursor, // This will be the createdAt timestamp of the last item
-    } = req.query as { limit?: string; cursor?: string };
-
-    // TODO: Get userId from auth middleware
-    const userId = 'test-user'; // Temporary! Remove when auth is implemented
-
-    // Build where clause
-    const where = {
-      userId,
-      ...(cursor ? {
-        createdAt: {
-          lt: new Date(cursor) // Get items created before the cursor
-        }
-      } : {})
-    };
-
-    // Get entries
-    const entries = await prisma.journalEntry.findMany({
-      where,
-      orderBy: {
-        createdAt: 'desc'
-      },
-      take: parseInt(limit) + 1, // Take one extra to know if there are more
-      select: {
-        id: true,
-        title: true,
-        content: true,
-        createdAt: true,
-        keyPoints: true,
-        sentiment: true,
-        emotionTags: true,
-        topicTags: true
-      }
-    });
-    
-    // Check if there are more entries
-    const hasMore = entries.length > parseInt(limit);
-    const items = hasMore ? entries.slice(0, -1) : entries;
-    const nextCursor = hasMore ? entries[entries.length - 2].createdAt.toISOString() : undefined;
-    
-    res.json({
-      entries: items,
-      nextCursor,
-      hasMore
-    });
-
-  } catch (error) {
-    console.error('Error fetching entries:', error);
-    res.status(500).json({ 
-      error: 'Failed to fetch entries',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
+router.get('/debug-route', async (req, res) => {
+  console.log('Hit debug route');
+  res.json({ 
+    message: 'Debug route hit correctly',
+    timestamp: new Date().toISOString()
+  });
 });
 
 export default router; 
