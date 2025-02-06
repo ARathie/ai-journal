@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useCallback} from 'react';
 import {
   View,
   Text,
@@ -32,57 +32,67 @@ interface ApiResponse {
 export default function JournalScreen({navigation}) {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nextCursor, setNextCursor] = useState<string | undefined>(undefined);
   const [hasMore, setHasMore] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [initialized, setInitialized] = useState(false);
+
+  const fetchEntries = useCallback(
+    async (shouldRefresh = false) => {
+      if (loading) return;
+
+      try {
+        if (!shouldRefresh && !hasMore) return;
+
+        if (shouldRefresh) {
+          setRefreshing(true);
+        } else {
+          setLoading(true);
+        }
+
+        const cursor = shouldRefresh ? '' : nextCursor;
+        const url = `http://192.168.1.95:3000/api/entries/list?limit=20${
+          cursor ? `&cursor=${cursor}` : ''
+        }`;
+
+        console.log('Fetching entries from:', url);
+
+        const response = await fetch(url);
+        console.log('Response status:', response.status);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Error response:', errorText);
+          throw new Error(`Failed to fetch entries: ${errorText}`);
+        }
+
+        const data: ApiResponse = await response.json();
+        console.log('Received entries:', data.entries.length);
+
+        setEntries(prevEntries =>
+          shouldRefresh ? data.entries : [...prevEntries, ...data.entries],
+        );
+        setNextCursor(data.nextCursor);
+        setHasMore(data.hasMore);
+        setInitialized(true);
+      } catch (err) {
+        console.error('Detailed fetch error:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load entries');
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [loading, hasMore, nextCursor],
+  );
 
   useEffect(() => {
-    fetchEntries();
-  }, []);
-
-  const fetchEntries = async (shouldRefresh = false) => {
-    try {
-      if (loading || (!hasMore && !shouldRefresh)) return;
-
-      setLoading(true);
-      const cursor = shouldRefresh ? '' : nextCursor;
-      const url = `http://192.168.1.95:3000/api/entries/list?limit=20${
-        cursor ? `&cursor=${cursor}` : ''
-      }`;
-
-      console.log('Fetching entries from:', url);
-
-      const response = await fetch(url);
-      console.log('Response status:', response.status);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Error response:', errorText);
-        throw new Error(`Failed to fetch entries: ${errorText}`);
-      }
-
-      const data: ApiResponse = await response.json();
-      console.log('Received data:', {
-        entriesCount: data.entries.length,
-        hasMore: data.hasMore,
-        nextCursor: data.nextCursor,
-      });
-
-      setEntries(prevEntries =>
-        shouldRefresh ? data.entries : [...prevEntries, ...data.entries],
-      );
-      setNextCursor(data.nextCursor);
-      setHasMore(data.hasMore);
-    } catch (err) {
-      console.error('Detailed fetch error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load entries');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+    if (!initialized) {
+      fetchEntries(true);
     }
-  };
+  }, [initialized, fetchEntries]);
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) {
@@ -119,28 +129,33 @@ export default function JournalScreen({navigation}) {
     }
   };
 
-  const renderItem = ({item}: {item: JournalEntry}) => {
-    const formattedDate = format(new Date(item.createdAt), 'MMM d, yyyy');
-    const keyPointsPreview = item.keyPoints.slice(0, 2).join(' • ');
+  const renderItem = useCallback(
+    ({item}: {item: JournalEntry}) => {
+      const formattedDate = format(new Date(item.createdAt), 'MMM d, yyyy');
+      const keyPointsPreview = item.keyPoints.slice(0, 2).join(' • ');
 
-    return (
-      <TouchableOpacity
-        style={styles.entryCard}
-        onPress={() =>
-          navigation.navigate('JournalDetail', {entryId: item.id})
-        }>
-        <Text style={styles.entryTitle}>{item.title || 'Untitled Entry'}</Text>
-        <Text style={styles.entryDate}>{formattedDate}</Text>
-        <Text style={styles.entryPreview} numberOfLines={2}>
-          {keyPointsPreview ||
-            item.content?.slice(0, 100) + '...' ||
-            'No content'}
-        </Text>
-      </TouchableOpacity>
-    );
-  };
+      return (
+        <TouchableOpacity
+          style={styles.entryCard}
+          onPress={() =>
+            navigation.navigate('JournalDetail', {entryId: item.id})
+          }>
+          <Text style={styles.entryTitle}>
+            {item.title || 'Untitled Entry'}
+          </Text>
+          <Text style={styles.entryDate}>{formattedDate}</Text>
+          <Text style={styles.entryPreview} numberOfLines={2}>
+            {keyPointsPreview ||
+              item.content?.slice(0, 100) + '...' ||
+              'No content'}
+          </Text>
+        </TouchableOpacity>
+      );
+    },
+    [navigation],
+  );
 
-  if (loading && !entries.length) {
+  if (!initialized && loading) {
     return (
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color="#007AFF" />

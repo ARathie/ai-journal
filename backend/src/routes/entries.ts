@@ -11,7 +11,6 @@ import openai from '../utils/openai';
 console.log('Entries router loaded');
 
 const router = express.Router();
-const prismaClient = new PrismaClient();
 
 // Add middleware to log all requests
 router.use((req, res, next) => {
