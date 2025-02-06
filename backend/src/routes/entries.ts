@@ -200,16 +200,65 @@ router.post('/:entryId/concatenate', async (req, res) => {
   }
 });
 
+router.post('/', async (req, res) => {
+  try {
+    const { content, title } = req.body;
+
+    // Generate all metadata at once
+    const [analysis, keyPoints] = await Promise.all([
+      analyzeContent(content),
+      summarizeContent(content)
+    ]);
+
+    // Create new entry with all metadata
+    const entry = await prisma.journalEntry.create({
+      data: { 
+        content,
+        title,
+        userId: 'test-user', // TODO: Get from auth middleware
+        sentiment: String(analysis.sentiment),
+        emotionTags: analysis.emotionTags,
+        topicTags: analysis.topicTags,
+        namedEntities: analysis.namedEntities,
+        keyPoints,
+      }
+    });
+
+    // Store embeddings and chunks
+    await embedAndStoreEntry(entry.id, content);
+
+    res.json({
+      success: true,
+      entry,
+      message: 'Journal entry created and analyzed successfully'
+    });
+
+  } catch (error) {
+    console.error('Create entry error:', error);
+    res.status(500).json({ 
+      error: 'Failed to create journal entry',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Modify existing /:entryId route to be update-only
 router.post('/:entryId', async (req, res) => {
   try {
     const { entryId } = req.params;
     const { content, title } = req.body;
 
-    // Get or create the entry
-    let entry = await ensureJournalEntry(entryId);
+    // Check if entry exists
+    const existingEntry = await prisma.journalEntry.findUnique({
+      where: { id: entryId }
+    });
 
-    // Update if it already existed
-    if (entry.content !== content || entry.title !== title) {
+    if (!existingEntry) {
+      return res.status(404).json({ error: 'Entry not found' });
+    }
+
+    // Update if content or title changed
+    if (existingEntry.content !== content || existingEntry.title !== title) {
       // Generate all metadata at once
       const [analysis, keyPoints] = await Promise.all([
         analyzeContent(content),
@@ -217,7 +266,7 @@ router.post('/:entryId', async (req, res) => {
       ]);
 
       // Update entry with all metadata
-      entry = await prisma.journalEntry.update({
+      const entry = await prisma.journalEntry.update({
         where: { id: entryId },
         data: { 
           content,
@@ -233,12 +282,18 @@ router.post('/:entryId', async (req, res) => {
 
       // After updating content and metadata, store embeddings and chunks
       await embedAndStoreEntry(entry.id, content);
+
+      return res.json({
+        success: true,
+        entry,
+        message: 'Journal entry updated and analyzed successfully'
+      });
     }
 
     res.json({
       success: true,
-      entry,
-      message: 'Journal entry updated and analyzed successfully'
+      entry: existingEntry,
+      message: 'No changes detected'
     });
 
   } catch (error) {

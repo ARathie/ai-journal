@@ -53,7 +53,7 @@ export default function JournalScreen({navigation}) {
         }
 
         const cursor = shouldRefresh ? '' : nextCursor;
-        const url = `http://192.168.1.95:3000/api/entries/list?limit=20${
+        const url = `http://localhost:3000/api/entries/list?limit=20${
           cursor ? `&cursor=${cursor}` : ''
         }`;
 
