@@ -23,6 +23,11 @@ function TabNavigator() {
       }}>
       <Tab.Screen name="Journal" component={JournalScreen} />
       <Tab.Screen name="Calendar" component={CalendarScreen} />
+      <Tab.Screen
+        name="NewEntry"
+        component={NewEntryScreen}
+        options={{tabBarButton: () => null}}
+      />
       <Tab.Screen name="Trends" component={TrendsScreen} />
       <Tab.Screen name="Account" component={AccountScreen} />
     </Tab.Navigator>
@@ -49,10 +54,7 @@ export default function App() {
         <Stack.Screen
           name="NewEntry"
           component={NewEntryScreen}
-          options={{
-            presentation: 'modal',
-            headerShown: false,
-          }}
+          options={{presentation: 'modal'}}
         />
       </Stack.Navigator>
     </NavigationContainer>
