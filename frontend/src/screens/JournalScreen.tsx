@@ -8,8 +8,10 @@ import {
   TextInput,
   SafeAreaView,
   ActivityIndicator,
+  Pressable,
 } from 'react-native';
 import {format} from 'date-fns';
+import {API_BASE_URL} from '../config/api';
 
 // Define types based on our Prisma schema
 interface JournalEntry {
@@ -53,7 +55,7 @@ export default function JournalScreen({navigation}) {
         }
 
         const cursor = shouldRefresh ? '' : nextCursor;
-        const url = `http://localhost:3000/api/entries/list?limit=20${
+        const url = `${API_BASE_URL}/entries/list?limit=20${
           cursor ? `&cursor=${cursor}` : ''
         }`;
 
@@ -102,16 +104,13 @@ export default function JournalScreen({navigation}) {
 
     try {
       setLoading(true);
-      const response = await fetch(
-        'http://localhost:3000/api/entries/search/qna',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({question: searchQuery}),
+      const response = await fetch(`${API_BASE_URL}/entries/search/qna`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-      );
+        body: JSON.stringify({question: searchQuery}),
+      });
 
       if (!response.ok) throw new Error('Search failed');
 
@@ -129,6 +128,10 @@ export default function JournalScreen({navigation}) {
     }
   };
 
+  const handleNewEntry = () => {
+    navigation.navigate('NewEntry');
+  };
+
   const renderItem = useCallback(
     ({item}: {item: JournalEntry}) => {
       const formattedDate = format(new Date(item.createdAt), 'MMM d, yyyy');
@@ -138,7 +141,7 @@ export default function JournalScreen({navigation}) {
         <TouchableOpacity
           style={styles.entryCard}
           onPress={() =>
-            navigation.navigate('JournalDetail', {entryId: item.id})
+            navigation.navigate('JournalDetailScreen', {entryId: item.id})
           }>
           <Text style={styles.entryTitle}>
             {item.title || 'Untitled Entry'}
@@ -200,6 +203,9 @@ export default function JournalScreen({navigation}) {
         onEndReached={() => fetchEntries()}
         onEndReachedThreshold={0.5}
       />
+      <Pressable onPress={handleNewEntry}>
+        <Text>New Entry</Text>
+      </Pressable>
     </SafeAreaView>
   );
 }

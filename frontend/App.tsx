@@ -4,6 +4,7 @@ import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 
 import JournalScreen from './src/screens/JournalScreen';
+import JournalDetailScreen from './src/screens/JournalDetailScreen';
 import CalendarScreen from './src/screens/CalendarScreen';
 import TrendsScreen from './src/screens/TrendsScreen';
 import AccountScreen from './src/screens/AccountScreen';
@@ -22,11 +23,6 @@ function TabNavigator() {
       }}>
       <Tab.Screen name="Journal" component={JournalScreen} />
       <Tab.Screen name="Calendar" component={CalendarScreen} />
-      <Tab.Screen
-        name="NewEntry"
-        component={NewEntryScreen}
-        options={{tabBarButton: () => null}}
-      />
       <Tab.Screen name="Trends" component={TrendsScreen} />
       <Tab.Screen name="Account" component={AccountScreen} />
     </Tab.Navigator>
@@ -43,9 +39,20 @@ export default function App() {
           options={{headerShown: false}}
         />
         <Stack.Screen
+          name="JournalDetailScreen"
+          component={JournalDetailScreen}
+          options={{
+            title: 'Entry Details',
+            presentation: 'card',
+          }}
+        />
+        <Stack.Screen
           name="NewEntry"
           component={NewEntryScreen}
-          options={{presentation: 'modal'}}
+          options={{
+            presentation: 'modal',
+            headerShown: false,
+          }}
         />
       </Stack.Navigator>
     </NavigationContainer>
