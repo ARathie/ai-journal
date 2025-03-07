@@ -12,25 +12,15 @@ console.log('Entries router loaded');
 
 const router = express.Router();
 
-// Add middleware to log all requests
-router.use((req, res, next) => {
-  console.log('Request received:', {
-    method: req.method,
-    path: req.path,
-    query: req.query
-  });
-  next();
-});
-
-// Add this near the top, right after creating the router
+// Add middleware to log all requests with comprehensive details
 router.use((req, res, next) => {
   console.log('Request details:', {
     method: req.method,
     path: req.path,
+    query: req.query,
     params: req.params,
     baseUrl: req.baseUrl,
-    originalUrl: req.originalUrl,
-    route: req.route
+    originalUrl: req.originalUrl
   });
   next();
 });
