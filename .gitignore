@@ -135,3 +135,7 @@ ios/frontend.xcodeproj/project.pbxproj.backup
 **/project.pbxproj.backup
 **/android/app/src/main/assets/
 /package.json
+
+# iOS specific files to ignore
+**/ios/frontend.xcodeproj/project.pbxproj
+**/ios/frontend/Info.plist
