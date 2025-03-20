@@ -128,3 +128,10 @@ frontend/android/app/debug.keystore
 *.keystore
 !debug.keystore
 
+# Additional project-specific files
+backup/
+**/link-assets-manifest.json
+ios/frontend.xcodeproj/project.pbxproj.backup
+**/project.pbxproj.backup
+**/android/app/src/main/assets/
+/package.json

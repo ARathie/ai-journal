@@ -1,6 +1,12 @@
 import React from 'react';
-import {View, TouchableOpacity, StyleSheet} from 'react-native';
-import Icon from 'react-native-vector-icons/Ionicons';
+import {View, TouchableOpacity, StyleSheet, Text} from 'react-native';
+import {
+  DocumentTextIcon,
+  CalendarIcon,
+  ChartBarIcon,
+  UserIcon,
+  PlusIcon,
+} from 'react-native-heroicons/outline';
 
 export default function CustomTabBar({state, descriptors, navigation}) {
   return (
@@ -8,6 +14,7 @@ export default function CustomTabBar({state, descriptors, navigation}) {
       {state.routes.map((route, index) => {
         const {options} = descriptors[route.key];
         const isFocused = state.index === index;
+        const color = isFocused ? '#007AFF' : '#8E8E93';
 
         // Handle center "+" button
         if (index === 2) {
@@ -16,20 +23,27 @@ export default function CustomTabBar({state, descriptors, navigation}) {
               key={route.key}
               style={styles.centerButton}
               onPress={() => navigation.navigate('NewEntry')}>
-              <Icon name="add-circle" size={50} color="#007AFF" />
+              <View style={styles.addCircle}>
+                <PlusIcon color="white" size={24} />
+              </View>
             </TouchableOpacity>
           );
         }
 
-        // Adjust index for icon selection after the center button
-        const getIconName = () => {
-          const icons = {
-            Journal: 'journal',
-            Calendar: 'calendar',
-            Trends: 'trending-up',
-            Account: 'person',
-          };
-          return icons[route.name] || 'square';
+        // Render the appropriate icon based on the route name
+        const renderIcon = () => {
+          switch (route.name) {
+            case 'Journal':
+              return <DocumentTextIcon size={24} color={color} />;
+            case 'Calendar':
+              return <CalendarIcon size={24} color={color} />;
+            case 'Trends':
+              return <ChartBarIcon size={24} color={color} />;
+            case 'Account':
+              return <UserIcon size={24} color={color} />;
+            default:
+              return <Text style={{color}}>•</Text>;
+          }
         };
 
         return (
@@ -37,11 +51,7 @@ export default function CustomTabBar({state, descriptors, navigation}) {
             key={route.key}
             style={styles.tabButton}
             onPress={() => navigation.navigate(route.name)}>
-            <Icon
-              name={getIconName()}
-              size={24}
-              color={isFocused ? '#007AFF' : '#8E8E93'}
-            />
+            {renderIcon()}
           </TouchableOpacity>
         );
       })}
@@ -68,5 +78,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: -25,
+  },
+  addCircle: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
